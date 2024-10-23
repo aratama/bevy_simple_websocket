@@ -11,3 +11,7 @@ Then, start client:
 ```
 $ trunk serve
 ```
+
+# Demo
+
+https://aratama.github.io/bevy_websocket_sync/

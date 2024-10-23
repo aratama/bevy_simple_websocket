@@ -8,6 +8,8 @@ use web_sys::Event;
 use web_sys::MessageEvent;
 use web_sys::WebSocket;
 
+use crate::console_log;
+
 #[derive(Resource)]
 struct WebSocketUrl(String);
 
@@ -26,6 +28,7 @@ struct StreamReceiver(Receiver<WebSocketReader>);
 
 #[derive(Event)]
 pub enum WebSocketReader {
+    Error(String),
     Open,
     Message(String),
 }
@@ -39,40 +42,57 @@ fn startup(
     mut instance: NonSendMut<WebSocketInstance>,
 ) {
     let (tx, rx) = bounded::<WebSocketReader>(10);
-
     let tx_ = tx.clone();
-    let ws = WebSocket::new(&url.0).expect("Failed to create WebSocket");
+    let tx__ = tx.clone();
 
-    let on_open = Closure::<dyn Fn()>::new(move || {
-        console::log_1(&"WebSocket opened".into());
-        tx_.send(WebSocketReader::Open).unwrap();
-    });
-    ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
-    on_open.forget();
+    console_log!("Connecting to WebSocket at {}", url.0);
 
-    let on_message = Closure::wrap(Box::new(move |event: Event| {
-        let message_event = event
-            .dyn_ref::<MessageEvent>()
-            .expect("Event should be a MessageEvent");
-        let message = message_event
-            .data()
-            .as_string()
-            .expect("Data should be a string");
-        console::log_1(&JsValue::from_str(
-            format!("WebSocket message: {:?}", message).as_str(),
-        ));
+    match WebSocket::new(&url.0) {
+        Ok(ws) => {
+            console_log!("Connected");
 
-        tx.send(WebSocketReader::Message(message)).unwrap();
-    }) as Box<dyn FnMut(_)>);
-    ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-    on_message.forget();
+            let on_error = Closure::wrap(Box::new(move |event: Event| {
+                web_sys::console::log_1(&JsValue::from(event));
+                tx__.send(WebSocketReader::Error("ERROR".to_string()))
+                    .unwrap();
+            }) as Box<dyn FnMut(_)>);
+            ws.set_onerror(Some(on_error.as_ref().unchecked_ref()));
+            on_error.forget();
 
-    *instance = WebSocketInstance {
-        websocket: Some(ws),
-        opened: false,
-    };
+            let on_open = Closure::<dyn Fn()>::new(move || {
+                console::log_1(&"WebSocket opened".into());
+                tx_.send(WebSocketReader::Open).unwrap();
+            });
+            ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+            on_open.forget();
 
-    commands.insert_resource(StreamReceiver(rx));
+            let on_message = Closure::wrap(Box::new(move |event: Event| {
+                let message_event = event
+                    .dyn_ref::<MessageEvent>()
+                    .expect("Event should be a MessageEvent");
+                let message = message_event
+                    .data()
+                    .as_string()
+                    .expect("Data should be a string");
+
+                console_log!("WebSocket message: {:?}", message);
+
+                tx.send(WebSocketReader::Message(message)).unwrap();
+            }) as Box<dyn FnMut(_)>);
+            ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+            on_message.forget();
+
+            *instance = WebSocketInstance {
+                websocket: Some(ws),
+                opened: false,
+            };
+
+            commands.insert_resource(StreamReceiver(rx));
+        }
+        Err(e) => {
+            console_log!("Failed to create WebSocket: {:?}", e);
+        }
+    }
 }
 
 // This system reads from the receiver and sends events to Bevy

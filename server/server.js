@@ -2,11 +2,25 @@ import { WebSocketServer } from 'ws';
 
 const wss = new WebSocketServer({ port: 8080 });
 
-wss.on('connection', (ws) => {
-  ws.on('error', console.error);
+wss.on('connection', (ws, req) => {
+
+  const ip = req.socket.remoteAddress;
+  console.log("Client connected, ip address:", ip)
+
+  ws.on('error', (e) => {
+    console.error(e);
+  });
+
+  ws.on('open', () =>  {
+    console.log('connected: ', ip);
+  });
+  
+  ws.on('close', () => {
+    console.log('disconnected: ', ip);
+  });
 
   ws.on('message', (data, isBinary) => {
-    // console.log('received: %s', data);
+    console.log('received: %s', data);
     
     for(const client of wss.clients) {
       if (client !== ws && client.readyState === WebSocket.OPEN) {

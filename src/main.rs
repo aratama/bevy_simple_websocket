@@ -35,7 +35,8 @@ fn main() {
             ..default()
         }))
         .add_plugins(WebSocketPlugin {
-            url: "ws://localhost:8080".to_string(),
+            // url: "ws://localhost:8080".to_string(),
+            url: "https://magia-server-38847751193.asia-northeast1.run.app".to_string(),
         })
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, (process_message, update))
@@ -43,12 +44,13 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
+    let uuid = Uuid::new_v4();
+    console_log!("self uuid: {:?}", uuid);
+
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
         SelfPlayer,
-        Player {
-            uuid: Uuid::new_v4(),
-        },
+        Player { uuid },
         SpriteBundle {
             texture: asset_setver.load("icon.png"),
             transform: Transform::from_xyz(100., 0., 0.),
@@ -69,12 +71,13 @@ fn update(
     for (player, mut transform) in self_query.iter_mut() {
         transform.translation.x += (d - l) * 2.0;
 
-        if instance.opened && frame_count.0 % 10 == 0 {
+        if instance.opened && frame_count.0 % 60 == 0 {
             let json = serde_json::to_string(&PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
             })
             .unwrap();
+            console_log!("send: {:?}", json.clone());
             writer.send(WebSocketWriter(json));
         }
     }
@@ -88,6 +91,7 @@ fn process_message(
 ) {
     for event in events.read() {
         match event {
+            WebSocketReader::Error(_) => console_log!("WebSocket error"),
             WebSocketReader::Open => console_log!("WebSocket opened"),
             WebSocketReader::Message(message) => {
                 if let Ok(msg) = serde_json::from_str::<PlayerMessage>(message) {
