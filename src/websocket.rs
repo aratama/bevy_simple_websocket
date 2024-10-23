@@ -4,7 +4,6 @@ use bevy::prelude::*;
 use crossbeam_channel::{bounded, Receiver};
 use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
 use web_sys::console;
 use web_sys::Blob;
 use web_sys::Event;
@@ -37,6 +36,7 @@ pub enum ServerMessage {
     Open,
     String(String),
     Binary(Vec<u8>),
+    Close,
 }
 
 #[derive(Event)]
@@ -51,8 +51,9 @@ fn startup(
     mut instance: NonSendMut<WebSocketInstance>,
 ) {
     let (tx, rx) = bounded::<ServerMessage>(10);
-    let tx_ = tx.clone();
-    let tx__ = tx.clone();
+    let tx_err = tx.clone();
+    let tx_open = tx.clone();
+    let tx_close = tx.clone();
     console_debug!("Connecting to WebSocket at {}", url.0);
     match WebSocket::new(&url.0) {
         Ok(ws) => {
@@ -60,7 +61,8 @@ fn startup(
 
             let on_error = Closure::wrap(Box::new(move |event: Event| {
                 web_sys::console::log_1(&JsValue::from(event));
-                tx__.send(ServerMessage::Error("ERROR".to_string()))
+                tx_err
+                    .send(ServerMessage::Error("ERROR".to_string()))
                     .unwrap();
             }) as Box<dyn FnMut(_)>);
             ws.set_onerror(Some(on_error.as_ref().unchecked_ref()));
@@ -68,7 +70,7 @@ fn startup(
 
             let on_open = Closure::<dyn Fn()>::new(move || {
                 console::log_1(&"WebSocket opened".into());
-                tx_.send(ServerMessage::Open).unwrap();
+                tx_open.send(ServerMessage::Open).unwrap();
             });
             ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
             on_open.forget();
@@ -102,6 +104,13 @@ fn startup(
             }) as Box<dyn FnMut(_)>);
             ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
             on_message.forget();
+
+            let on_close = Closure::<dyn Fn()>::new(move || {
+                console::log_1(&"WebSocket closed".into());
+                tx_close.send(ServerMessage::Close).unwrap();
+            });
+            ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+            on_close.forget();
 
             *instance = WebSocketInstance {
                 websocket: Some(ws),
@@ -161,14 +170,4 @@ impl Plugin for WebSocketPlugin {
             .insert_resource(WebSocketUrl(self.url.clone()))
             .init_non_send_resource::<WebSocketInstance>();
     }
-}
-
-async fn blob_into_bytes(blob: &Blob) -> Vec<u8> {
-    let array_buffer_promise: JsFuture = blob.array_buffer().into();
-
-    let array_buffer: JsValue = array_buffer_promise
-        .await
-        .expect("Could not get ArrayBuffer from file");
-
-    js_sys::Uint8Array::new(&array_buffer).to_vec()
 }

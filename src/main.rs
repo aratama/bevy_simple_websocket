@@ -4,6 +4,7 @@ mod websocket;
 use bevy::asset::AssetMetaCheck;
 use bevy::core::FrameCount;
 use bevy::prelude::*;
+use rand;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
@@ -30,20 +31,6 @@ struct SelfPlayer {
     uuid: Uuid,
 }
 
-#[derive(Resource)]
-struct Settings {
-    sleep: u32,
-}
-
-#[derive(Component)]
-struct SleepSetting(u32);
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self { sleep: 60 }
-    }
-}
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {
@@ -56,8 +43,7 @@ fn main() {
             url: "https://magia-server-38847751193.asia-northeast1.run.app".to_string(),
         })
         .add_systems(Startup, setup)
-        .add_systems(FixedUpdate, (process_message, update, button_system))
-        .init_resource::<Settings>()
+        .add_systems(FixedUpdate, (process_message, update))
         .run();
 }
 
@@ -70,57 +56,14 @@ fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
         SelfPlayer { uuid },
         SpriteBundle {
             texture: asset_setver.load("icon.png"),
-            transform: Transform::from_xyz(100., 0., 0.),
+            transform: Transform::from_xyz(
+                500.0 * (rand::random::<f32>() - 0.5),
+                500.0 * (rand::random::<f32>() - 0.5),
+                0.,
+            ),
             ..default()
         },
     ));
-
-    let sleeps = [2, 3, 4, 5, 10, 20, 60];
-
-    for (i, sleep) in sleeps.iter().enumerate() {
-        commands
-            .spawn((
-                SleepSetting(i as u32),
-                ButtonBundle {
-                    style: Style {
-                        top: Val::Px(100.0 + 50.0 * i as f32),
-                        left: Val::Px(20.0),
-                        width: Val::Px(50.0),
-                        height: Val::Px(30.0),
-                        border: UiRect::all(Val::Px(2.0)),
-                        ..default()
-                    },
-                    border_color: BorderColor(Color::WHITE),
-                    ..default()
-                },
-            ))
-            .with_children(|parent| {
-                parent.spawn(TextBundle::from_section(
-                    format!("{}", sleep),
-                    TextStyle {
-                        font_size: 20.0,
-                        color: Color::srgb(0.9, 0.9, 0.9),
-                        ..default()
-                    },
-                ));
-            });
-    }
-
-    commands.spawn(
-        TextBundle::from_section(
-            "Sync Interval",
-            TextStyle {
-                font_size: 20.0,
-                color: Color::srgb(0.9, 0.9, 0.9),
-                ..default()
-            },
-        )
-        .with_style(Style {
-            top: Val::Px(60.0),
-            left: Val::Px(20.0),
-            ..default()
-        }),
-    );
 }
 
 fn update(
@@ -131,14 +74,19 @@ fn update(
     others_query: Query<(Entity, &mut OtherPlayer)>,
     instance: NonSend<WebSocketInstance>,
     frame_count: Res<FrameCount>,
-    settings: Res<Settings>,
 ) {
-    let l = to_sign(&keys, KeyCode::KeyA);
+    let w = to_sign(&keys, KeyCode::KeyW);
+    let a = to_sign(&keys, KeyCode::KeyA);
+    let s = to_sign(&keys, KeyCode::KeyS);
     let d = to_sign(&keys, KeyCode::KeyD);
     for (player, mut transform) in self_query.iter_mut() {
-        transform.translation.x += (d - l) * 2.0;
+        transform.translation.x += (d - a) * 2.0;
+        transform.translation.y += (w - s) * 2.0;
 
-        if instance.opened && frame_count.0 % settings.sleep == 0 {
+        //
+        let message_interval = 6;
+
+        if instance.opened && frame_count.0 % message_interval == 0 {
             let value = PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
@@ -160,14 +108,18 @@ fn update(
 fn process_message(
     mut commands: Commands,
     asset_setver: Res<AssetServer>,
-    mut events: EventReader<ServerMessage>,
     mut query: Query<(&mut OtherPlayer, &mut Transform)>,
     frame_count: Res<FrameCount>,
+    mut reader: EventReader<ServerMessage>,
+    mut writer: EventWriter<ClientMessage>,
 ) {
-    for event in events.read() {
+    for event in reader.read() {
         match event {
-            ServerMessage::Error(_) => console_log!("WebSocket error"),
-            ServerMessage::Open => console_log!("WebSocket opened"),
+            ServerMessage::Error(err) => console_log!("WebSocket error: {:?}", err),
+            ServerMessage::Open => {
+                console_log!("WebSocket opened");
+                writer.send(ClientMessage::String("hello, server".to_string()));
+            }
             ServerMessage::String(message) => {
                 console_log!("WebSocket string message: {:?}", message);
             }
@@ -175,16 +127,19 @@ fn process_message(
                 let msg = bincode::deserialize::<PlayerMessage>(bytes).unwrap();
                 console_log!("WebSocket binary message({:?}): {:?}", bytes.len(), msg);
 
-                // sync position
+                // sync position of existing player
                 let mut synced = false;
                 for (mut p, mut t) in query.iter_mut() {
                     if p.uuid == msg.uuid {
                         t.translation.x = msg.position.x;
+                        t.translation.y = msg.position.y;
                         p.last_update = frame_count.clone();
                         synced = true;
+                        break;
                     }
                 }
-                // spawn other player
+
+                // spawn new player
                 if !synced {
                     console_log!("spawning other player {:?}", msg.uuid);
                     commands.spawn((
@@ -200,24 +155,7 @@ fn process_message(
                     ));
                 }
             }
-        }
-    }
-}
-
-fn button_system(
-    mut interaction_query: Query<
-        (&Interaction, &mut SleepSetting),
-        (Changed<Interaction>, With<Button>),
-    >,
-    mut settings: ResMut<Settings>,
-) {
-    for (interaction, sleep_of_button) in &mut interaction_query {
-        match *interaction {
-            Interaction::Pressed => {
-                settings.sleep = sleep_of_button.0;
-            }
-            Interaction::Hovered => {}
-            Interaction::None => {}
+            ServerMessage::Close => console_log!("WebSocket closed"),
         }
     }
 }
