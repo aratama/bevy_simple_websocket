@@ -1,0 +1,9 @@
+[serve]
+port = 3000
+
+[build]
+release = true
+minify = "always"
+public_url = "./"
+wasm_opt = "z"
+dist = "docs"

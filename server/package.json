@@ -1,0 +1,16 @@
+{
+  "name": "websocket-server-client",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "gcloud run deploy magia-server --project=magia-439208 --region=asia-northeast1 --allow-unauthenticated --max-instances=1 --timeout=60m --source ."
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "type":"module"
+}
