@@ -71,7 +71,7 @@ fn update(
     for (player, mut transform) in self_query.iter_mut() {
         transform.translation.x += (d - l) * 2.0;
 
-        if instance.opened && frame_count.0 % 60 == 0 {
+        if instance.opened && frame_count.0 % 10 == 0 {
             let json = serde_json::to_string(&PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
