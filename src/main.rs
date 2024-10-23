@@ -20,12 +20,15 @@ struct PlayerMessage {
 }
 
 #[derive(Component)]
-struct Player {
+struct OtherPlayer {
     uuid: Uuid,
+    last_update: FrameCount,
 }
 
 #[derive(Component)]
-struct SelfPlayer;
+struct SelfPlayer {
+    uuid: Uuid,
+}
 
 #[derive(Resource)]
 struct Settings {
@@ -64,8 +67,7 @@ fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
 
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
-        SelfPlayer,
-        Player { uuid },
+        SelfPlayer { uuid },
         SpriteBundle {
             texture: asset_setver.load("icon.png"),
             transform: Transform::from_xyz(100., 0., 0.),
@@ -82,7 +84,7 @@ fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
                 ButtonBundle {
                     style: Style {
                         top: Val::Px(100.0 + 50.0 * i as f32),
-                        left: Val::Px(50.0),
+                        left: Val::Px(20.0),
                         width: Val::Px(50.0),
                         height: Val::Px(30.0),
                         border: UiRect::all(Val::Px(2.0)),
@@ -103,12 +105,30 @@ fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
                 ));
             });
     }
+
+    commands.spawn(
+        TextBundle::from_section(
+            "Sync Interval",
+            TextStyle {
+                font_size: 20.0,
+                color: Color::srgb(0.9, 0.9, 0.9),
+                ..default()
+            },
+        )
+        .with_style(Style {
+            top: Val::Px(60.0),
+            left: Val::Px(20.0),
+            ..default()
+        }),
+    );
 }
 
 fn update(
+    mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     mut writer: EventWriter<WebSocketWriter>,
-    mut self_query: Query<(&Player, &mut Transform), With<SelfPlayer>>,
+    mut self_query: Query<(&SelfPlayer, &mut Transform)>,
+    others_query: Query<(Entity, &mut OtherPlayer)>,
     instance: NonSend<WebSocketInstance>,
     frame_count: Res<FrameCount>,
     settings: Res<Settings>,
@@ -128,13 +148,21 @@ fn update(
             writer.send(WebSocketWriter(json));
         }
     }
+
+    for (entity, player) in others_query.iter() {
+        if 120 < (frame_count.0 - player.last_update.0) {
+            console_log!("despawn other player {:?}", player.uuid);
+            commands.entity(entity).despawn();
+        }
+    }
 }
 
 fn process_message(
     mut commands: Commands,
     asset_setver: Res<AssetServer>,
     mut events: EventReader<WebSocketReader>,
-    mut query: Query<(&Player, &mut Transform)>,
+    mut query: Query<(&mut OtherPlayer, &mut Transform)>,
+    frame_count: Res<FrameCount>,
 ) {
     for event in events.read() {
         match event {
@@ -144,9 +172,10 @@ fn process_message(
                 if let Ok(msg) = serde_json::from_str::<PlayerMessage>(message.as_str()) {
                     // sync position
                     let mut synced = false;
-                    for (p, mut t) in query.iter_mut() {
+                    for (mut p, mut t) in query.iter_mut() {
                         if p.uuid == msg.uuid {
                             t.translation.x = msg.position.x;
+                            p.last_update = frame_count.clone();
                             synced = true;
                         }
                     }
@@ -154,7 +183,10 @@ fn process_message(
                     if !synced {
                         console_log!("spawn other player {:?}", msg.uuid);
                         commands.spawn((
-                            Player { uuid: msg.uuid },
+                            OtherPlayer {
+                                uuid: msg.uuid,
+                                last_update: frame_count.clone(),
+                            },
                             SpriteBundle {
                                 texture: asset_setver.load("icon.png"),
                                 transform: Transform::from_xyz(msg.position.x, 0., 0.),
