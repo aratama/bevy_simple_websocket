@@ -3,12 +3,12 @@
 use bevy::prelude::*;
 use crossbeam_channel::unbounded;
 use crossbeam_channel::Receiver;
+use js_sys::ArrayBuffer;
 use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
-use web_sys::Blob;
+use web_sys::BinaryType;
 use web_sys::Event;
-use web_sys::FileReader;
 use web_sys::MessageEvent;
 use web_sys::WebSocket;
 
@@ -56,6 +56,8 @@ fn startup(
         Ok(ws) => {
             console_debug!("Connected");
 
+            ws.set_binary_type(BinaryType::Arraybuffer);
+
             let on_error = Closure::wrap(Box::new(move |event: Event| {
                 web_sys::console::log_1(&JsValue::from(event));
                 tx_err
@@ -81,22 +83,13 @@ fn startup(
                     let message = data.as_string().expect("Data should be a string");
                     console_debug!("WebSocket message: {:?}", message);
                     tx.send(ServerMessage::String(message)).unwrap();
-                } else if data.is_instance_of::<Blob>() {
-                    let blob = data.dyn_ref::<Blob>().unwrap();
-                    let reader = FileReader::new().unwrap();
-                    reader.read_as_array_buffer(&blob).unwrap();
-                    let tx2 = tx.clone();
-                    let onloadend = Closure::wrap(Box::new(move |event: Event| {
-                        let target = event.target().unwrap();
-                        let reader2: &FileReader = target.dyn_ref().unwrap();
-                        let result = reader2.result().unwrap();
-                        let array_buffer: js_sys::ArrayBuffer = result.dyn_into().unwrap();
-                        let uint8_array = Uint8Array::new(&array_buffer);
-                        let vec = uint8_array.to_vec();
-                        tx2.send(ServerMessage::Binary(vec)).unwrap();
-                    }) as Box<dyn FnMut(_)>);
-                    reader.set_onloadend(Some(onloadend.as_ref().unchecked_ref()));
-                    onloadend.forget();
+                } else if data.is_instance_of::<ArrayBuffer>() {
+                    let array_buffer = data.dyn_ref::<ArrayBuffer>().unwrap();
+                    let uint8_array = Uint8Array::new(&array_buffer);
+                    let vec = uint8_array.to_vec();
+                    tx.send(ServerMessage::Binary(vec)).unwrap();
+                } else {
+                    console_error!("Unexpected WebSocket message type");
                 }
             }) as Box<dyn FnMut(_)>);
             ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
