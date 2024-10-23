@@ -8,10 +8,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
+use websocket::ClientMessage;
+use websocket::ServerMessage;
 use websocket::WebSocketInstance;
 use websocket::WebSocketPlugin;
-use websocket::WebSocketReader;
-use websocket::WebSocketWriter;
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 struct PlayerMessage {
@@ -126,7 +126,7 @@ fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
 fn update(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    mut writer: EventWriter<WebSocketWriter>,
+    mut writer: EventWriter<ClientMessage>,
     mut self_query: Query<(&SelfPlayer, &mut Transform)>,
     others_query: Query<(Entity, &mut OtherPlayer)>,
     instance: NonSend<WebSocketInstance>,
@@ -139,13 +139,13 @@ fn update(
         transform.translation.x += (d - l) * 2.0;
 
         if instance.opened && frame_count.0 % settings.sleep == 0 {
-            let json = serde_json::to_string(&PlayerMessage {
+            let value = PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
-            })
-            .unwrap();
-            console_log!("send: {:?}", json.clone());
-            writer.send(WebSocketWriter(json));
+            };
+            let bin = bincode::serialize(&value).unwrap();
+            console_log!("send bincode");
+            writer.send(ClientMessage::Binary(bin));
         }
     }
 
@@ -160,42 +160,44 @@ fn update(
 fn process_message(
     mut commands: Commands,
     asset_setver: Res<AssetServer>,
-    mut events: EventReader<WebSocketReader>,
+    mut events: EventReader<ServerMessage>,
     mut query: Query<(&mut OtherPlayer, &mut Transform)>,
     frame_count: Res<FrameCount>,
 ) {
     for event in events.read() {
         match event {
-            WebSocketReader::Error(_) => console_log!("WebSocket error"),
-            WebSocketReader::Open => console_log!("WebSocket opened"),
-            WebSocketReader::Message(message) => {
-                if let Ok(msg) = serde_json::from_str::<PlayerMessage>(message.as_str()) {
-                    // sync position
-                    let mut synced = false;
-                    for (mut p, mut t) in query.iter_mut() {
-                        if p.uuid == msg.uuid {
-                            t.translation.x = msg.position.x;
-                            p.last_update = frame_count.clone();
-                            synced = true;
-                        }
+            ServerMessage::Error(_) => console_log!("WebSocket error"),
+            ServerMessage::Open => console_log!("WebSocket opened"),
+            ServerMessage::String(message) => {
+                console_log!("WebSocket string message: {:?}", message);
+            }
+            ServerMessage::Binary(bytes) => {
+                let msg = bincode::deserialize::<PlayerMessage>(bytes).unwrap();
+                console_log!("WebSocket binary message({:?}): {:?}", bytes.len(), msg);
+
+                // sync position
+                let mut synced = false;
+                for (mut p, mut t) in query.iter_mut() {
+                    if p.uuid == msg.uuid {
+                        t.translation.x = msg.position.x;
+                        p.last_update = frame_count.clone();
+                        synced = true;
                     }
-                    // spawn other player
-                    if !synced {
-                        console_log!("spawn other player {:?}", msg.uuid);
-                        commands.spawn((
-                            OtherPlayer {
-                                uuid: msg.uuid,
-                                last_update: frame_count.clone(),
-                            },
-                            SpriteBundle {
-                                texture: asset_setver.load("icon.png"),
-                                transform: Transform::from_xyz(msg.position.x, 0., 0.),
-                                ..default()
-                            },
-                        ));
-                    }
-                } else {
-                    console_log!("WebSocket message: {:?}", message);
+                }
+                // spawn other player
+                if !synced {
+                    console_log!("spawning other player {:?}", msg.uuid);
+                    commands.spawn((
+                        OtherPlayer {
+                            uuid: msg.uuid,
+                            last_update: frame_count.clone(),
+                        },
+                        SpriteBundle {
+                            texture: asset_setver.load("icon.png"),
+                            transform: Transform::from_xyz(msg.position.x, 0., 0.),
+                            ..default()
+                        },
+                    ));
                 }
             }
         }
