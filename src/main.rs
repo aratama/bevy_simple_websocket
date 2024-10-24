@@ -1,5 +1,7 @@
 mod console;
 mod websocket;
+mod websocket_shared;
+mod websocket_wasm;
 
 use bevy::asset::AssetMetaCheck;
 use bevy::core::FrameCount;
@@ -10,10 +12,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
-use websocket::ClientMessage;
-use websocket::ServerMessage;
-use websocket::WebSocketInstance;
 use websocket::WebSocketPlugin;
+use websocket_shared::*;
+use websocket_wasm::WebSocketInstance;
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 struct PlayerMessage {
