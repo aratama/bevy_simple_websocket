@@ -1,5 +1,7 @@
 # bevy_websocket_sync
 
+Experimental real-time syncing code snippet for the Bevy Engine using WebSocket.
+
 ## Usage
 
 Add `.env` as:
@@ -11,7 +13,8 @@ url=ws://localhost:8080
 Then, start WebSocket server:
 
 ```
-$ trunk serve
+$ cd serve
+$ node server
 ```
 
 Finally, start client:
