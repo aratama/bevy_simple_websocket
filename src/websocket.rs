@@ -38,6 +38,7 @@ pub enum ClientMessage {
     Open(String),
     String(String),
     Binary(Vec<u8>),
+    Close,
 }
 
 // This system reads from the receiver and sends events to Bevy
@@ -67,6 +68,13 @@ fn write_message(
     for event in events.read() {
         match event {
             ClientMessage::Open(url) => {
+                // Close the existing WebSocket if it exists
+                if let Some(ws) = &instance.websocket {
+                    ws.close().unwrap();
+                    instance.websocket = None;
+                    instance.open = false;
+                }
+
                 let (tx, rx) = unbounded::<ServerMessage>();
                 let tx_err = tx.clone();
                 let tx_open = tx.clone();
@@ -144,6 +152,13 @@ fn write_message(
             ClientMessage::Binary(b) => {
                 if let Some(ws) = &instance.websocket {
                     ws.send_with_u8_array(b).unwrap();
+                }
+            }
+            ClientMessage::Close => {
+                if let Some(ws) = &instance.websocket {
+                    ws.close().unwrap();
+                    instance.websocket = None;
+                    instance.open = false;
                 }
             }
         }
