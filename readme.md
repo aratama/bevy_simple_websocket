@@ -1,12 +1,20 @@
 # bevy_websocket_sync
 
-Start WebSocket server:
+## Usage
+
+Add `.env` as:
+
+```
+url=ws://localhost:8080
+```
+
+Then, start WebSocket server:
 
 ```
 $ trunk serve
 ```
 
-Then, start client:
+Finally, start client:
 
 ```
 $ trunk serve

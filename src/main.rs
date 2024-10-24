@@ -4,6 +4,7 @@ mod websocket;
 use bevy::asset::AssetMetaCheck;
 use bevy::core::FrameCount;
 use bevy::prelude::*;
+use dotenvy_macro::dotenv;
 use rand;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,16 +39,17 @@ fn main() {
             meta_check: AssetMetaCheck::Never,
             ..default()
         }))
-        .add_plugins(WebSocketPlugin {
-            // url: "ws://localhost:8080".to_string(),
-            url: "https://magia-server-38847751193.asia-northeast1.run.app".to_string(),
-        })
+        .add_plugins(WebSocketPlugin)
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, (process_message, update))
         .run();
 }
 
-fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
+fn setup(
+    mut commands: Commands,
+    asset_setver: Res<AssetServer>,
+    mut writer: EventWriter<ClientMessage>,
+) {
     let uuid = Uuid::new_v4();
     console_log!("self uuid: {:?}", uuid);
 
@@ -64,6 +66,9 @@ fn setup(mut commands: Commands, asset_setver: Res<AssetServer>) {
             ..default()
         },
     ));
+
+    let url = dotenv!("url");
+    writer.send(ClientMessage::Open(url.to_string()));
 }
 
 fn update(
@@ -85,7 +90,7 @@ fn update(
 
         let message_interval = 1;
 
-        if instance.opened && frame_count.0 % message_interval == 0 {
+        if instance.open && frame_count.0 % message_interval == 0 {
             let value = PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
