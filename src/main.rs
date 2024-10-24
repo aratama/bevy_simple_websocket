@@ -117,6 +117,11 @@ fn update(
             commands.entity(entity).despawn();
         }
     }
+
+    if keys.just_pressed(KeyCode::Space) {
+        writer.send(ClientMessage::String("Hello ".to_string()));
+        println!("Sent message");
+    }
 }
 
 fn process_message(
@@ -131,6 +136,7 @@ fn process_message(
         match event {
             ServerMessage::Error(err) => {
                 // console_log!("WebSocket error: {:?}", err)
+                println!("WebSocket error: {:?}", err);
             }
             ServerMessage::Open => {
                 // console_log!("WebSocket opened");
