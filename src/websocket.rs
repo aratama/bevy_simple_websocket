@@ -19,6 +19,14 @@ impl Plugin for WebSocketPlugin {
         app.add_systems(Update, (read_stream_wasm, write_message_wasm));
 
         #[cfg(not(target_arch = "wasm32"))]
-        app.add_systems(Update, (read_stream_native, write_message_native));
+        app.add_systems(
+            Update,
+            (
+                read_stream_native,
+                write_message_native,
+                handle_tasks,
+                start_reading,
+            ),
+        );
     }
 }

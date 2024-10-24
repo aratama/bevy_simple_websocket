@@ -42,7 +42,8 @@ struct SelfPlayer {
     uuid: Uuid,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             // https://github.com/bevyengine/bevy/issues/10157
