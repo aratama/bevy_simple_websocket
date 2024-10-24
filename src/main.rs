@@ -1,29 +1,12 @@
-mod console;
-mod websocket;
-mod websocket_shared;
-
-#[cfg(target_arch = "wasm32")]
-mod websocket_wasm;
-
-#[cfg(not(target_arch = "wasm32"))]
-mod websocket_native;
-
 use bevy::asset::AssetMetaCheck;
 use bevy::core::FrameCount;
 use bevy::prelude::*;
+use bevy_websocket_sync::*;
 use dotenvy_macro::dotenv;
 use rand;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
-use websocket::WebSocketPlugin;
-use websocket_shared::*;
-
-#[cfg(target_arch = "wasm32")]
-use websocket_wasm::WebSocketInstance;
-
-#[cfg(not(target_arch = "wasm32"))]
-use websocket_native::WebSocketInstance;
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 struct PlayerMessage {
@@ -42,8 +25,18 @@ struct SelfPlayer {
     uuid: Uuid,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() {
+    start();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    start();
+}
+
+fn start() {
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             // https://github.com/bevyengine/bevy/issues/10157
