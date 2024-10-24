@@ -1,5 +1,5 @@
+#![cfg(target_arch = "wasm32")]
 // https://rustwasm.github.io/wasm-bindgen/examples/console-log.html
-
 #[macro_export]
 macro_rules! console_log {
     // Note that this is using the `log` function imported above during

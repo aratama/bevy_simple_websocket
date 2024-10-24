@@ -4,6 +4,9 @@ use bevy::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use crate::websocket_wasm::*;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::websocket_native::*;
+
 pub struct WebSocketPlugin;
 
 impl Plugin for WebSocketPlugin {
@@ -14,5 +17,8 @@ impl Plugin for WebSocketPlugin {
 
         #[cfg(target_arch = "wasm32")]
         app.add_systems(Update, (read_stream_wasm, write_message_wasm));
+
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_systems(Update, (read_stream_native, write_message_native));
     }
 }

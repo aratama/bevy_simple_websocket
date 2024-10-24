@@ -1,4 +1,4 @@
-#[cfg(target_arch = "wasm32")]
+#![cfg(target_arch = "wasm32")]
 // https://github.com/bevyengine/bevy/blob/main/examples/async_tasks/external_source_external_thread.rs
 use bevy::prelude::*;
 use crossbeam_channel::unbounded;
