@@ -27,11 +27,21 @@ struct SelfPlayer {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(AssetPlugin {
-            // https://github.com/bevyengine/bevy/issues/10157
-            meta_check: AssetMetaCheck::Never,
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    // https://github.com/bevyengine/bevy/issues/10157
+                    meta_check: AssetMetaCheck::Never,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        resolution: (500., 300.).into(),
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .add_plugins(WebSocketPlugin)
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, (process_message, update))
@@ -52,10 +62,11 @@ fn setup(
         SpriteBundle {
             texture: asset_setver.load("icon.png"),
             transform: Transform::from_xyz(
-                500.0 * (rand::random::<f32>() - 0.5),
-                500.0 * (rand::random::<f32>() - 0.5),
+                200.0 * (rand::random::<f32>() - 0.5),
+                200.0 * (rand::random::<f32>() - 0.5),
                 0.,
-            ),
+            )
+            .with_scale(Vec3::splat(0.2)),
             ..default()
         },
     ));
@@ -151,7 +162,8 @@ fn process_message(
                         },
                         SpriteBundle {
                             texture: asset_setver.load("icon.png"),
-                            transform: Transform::from_xyz(msg.position.x, 0., 0.),
+                            transform: Transform::from_xyz(msg.position.x, 0., 0.)
+                                .with_scale(Vec3::splat(0.2)),
                             ..default()
                         },
                     ));

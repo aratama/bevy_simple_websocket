@@ -1,8 +1,9 @@
 # bevy_websocket_sync
 
-Experimental real-time syncing code snippet for the Bevy Engine using WebSocket.
+Simple WebSocket client library for Bevy.
+This library works in both native and WASM.
 
-## Usage
+## Usage of Example
 
 Add `.env` as:
 

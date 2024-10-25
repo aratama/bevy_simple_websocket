@@ -57,7 +57,7 @@ pub fn write_message_native(
                 let url_clone = url.clone();
 
                 // https://github.com/snapview/tokio-tungstenite/blob/master/examples/client.rs
-                runtime.spawn_background_task(|mut _ctx| async move {
+                runtime.spawn_background_task(|mut ctx| async move {
                     let (sender, receiver) = crossbeam_channel::unbounded::<Message>();
 
                     let sender_clone = sender.clone();
@@ -66,27 +66,12 @@ pub fn write_message_native(
 
                     println!("Connecting to WebSocket at {}", url_clone);
 
-                    let (ws_stream, response) =
+                    let (ws_stream, _response) =
                         connect_async(url_clone).await.expect("can't connect");
-                    println!("Connected to the server");
-                    println!("Response HTTP code: {}", response.status());
-                    println!("Response contains the following headers:");
-                    for (header, _value) in response.headers() {
-                        println!("* {header}");
-                    }
 
-                    let (mut write, read) = ws_stream.split();
-
-                    write
-                        .send(Message::Text("hogehoge".to_string()))
-                        .await
-                        .unwrap();
+                    let (write, read) = ws_stream.split();
 
                     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
-
-                    stdin_tx
-                        .unbounded_send(Message::Text("piyopiyo".to_string()))
-                        .expect("unbounded_send failed");
 
                     let ws_to_stdout = {
                         read.for_each(|message| async {
@@ -94,7 +79,7 @@ pub fn write_message_native(
                         })
                     };
 
-                    _ctx.run_on_main_thread(move |ctx| {
+                    ctx.run_on_main_thread(move |ctx| {
                         let world = ctx.world;
                         world.insert_non_send_resource(WebSocketInstance {
                             stdin_tx: Some(stdin_tx),
@@ -102,14 +87,14 @@ pub fn write_message_native(
                             sender: Some(sender_clone),
                             receiver: Some(receiver),
                         });
+                        world.send_event(ServerMessage::Open);
+
+                        println!("Connected to the server");
                     })
                     .await;
 
-                    println!("pub mut");
                     pin_mut!(stdin_to_ws, ws_to_stdout);
-                    println!("select");
                     future::select(stdin_to_ws, ws_to_stdout).await;
-                    println!("ok");
                 });
             }
             ClientMessage::String(s) => {
