@@ -25,18 +25,7 @@ struct SelfPlayer {
     uuid: Uuid,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[tokio::main]
-async fn main() {
-    start();
-}
-
-#[cfg(target_arch = "wasm32")]
 fn main() {
-    start();
-}
-
-fn start() {
     App::new()
         .add_plugins(DefaultPlugins.set(AssetPlugin {
             // https://github.com/bevyengine/bevy/issues/10157
@@ -114,7 +103,6 @@ fn update(
 
     if keys.just_pressed(KeyCode::Space) {
         writer.send(ClientMessage::String("Hello ".to_string()));
-        println!("Sent message");
     }
 }
 
@@ -138,6 +126,7 @@ fn process_message(
             }
             ServerMessage::String(message) => {
                 // console_log!("WebSocket string message: {:?}", message);
+                println!("WebSocket string message: {:?}", message);
             }
             ServerMessage::Binary(bytes) => {
                 let msg = bincode::deserialize::<PlayerMessage>(bytes).unwrap();
