@@ -18,10 +18,10 @@ use crate::websocket_wasm::*;
 use crate::websocket_native::*;
 
 #[cfg(target_arch = "wasm32")]
-pub use websocket_wasm::WebSocketInstance;
+use websocket_wasm::WebSocketInstance;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use websocket_native::WebSocketInstance;
+use websocket_native::WebSocketInstance;
 
 pub struct WebSocketPlugin;
 
@@ -29,7 +29,8 @@ impl Plugin for WebSocketPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ServerMessage>()
             .add_event::<ClientMessage>()
-            .init_non_send_resource::<WebSocketInstance>();
+            .init_non_send_resource::<WebSocketInstance>()
+            .init_resource::<WebSocketState>();
 
         #[cfg(target_arch = "wasm32")]
         app.add_systems(Update, (read_stream_wasm, write_message_wasm));

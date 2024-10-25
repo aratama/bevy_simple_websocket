@@ -1,6 +1,6 @@
 # bevy_websocket_sync
 
-Simple WebSocket client library for Bevy.
+Extremely simple WebSocket client library for Bevy.
 This library works in both native and WASM.
 
 ## Usage of Example

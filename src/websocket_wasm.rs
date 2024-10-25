@@ -1,41 +1,37 @@
 #![cfg(target_arch = "wasm32")]
-// https://github.com/bevyengine/bevy/blob/main/examples/async_tasks/external_source_external_thread.rs
+
+use crate::websocket_shared::*;
 use bevy::prelude::*;
 use crossbeam_channel::unbounded;
 use js_sys::ArrayBuffer;
 use js_sys::Uint8Array;
 use wasm_bindgen::prelude::*;
-use web_sys::console;
 use web_sys::BinaryType;
 use web_sys::Event;
 use web_sys::MessageEvent;
 use web_sys::WebSocket;
 
-use crate::console_debug;
-use crate::console_error;
-use crate::websocket_shared::*;
-
 #[derive(Default)]
-pub struct WebSocketInstance {
+pub(crate) struct WebSocketInstance {
     pub websocket: Option<WebSocket>,
-    pub open: bool,
 }
 
 // This system reads from the receiver and sends events to Bevy
-pub fn read_stream_wasm(
+pub(crate) fn read_stream_wasm(
     receiver_option: Option<Res<StreamReceiver>>,
     mut events: EventWriter<ServerMessage>,
     mut instance: NonSendMut<WebSocketInstance>,
+    mut state: ResMut<WebSocketState>,
 ) {
     if let Some(receiver) = receiver_option {
         for from_stream in receiver.try_iter() {
             match from_stream {
                 ServerMessage::Open => {
-                    instance.open = true;
+                    state.ready_state = ReadyState::OPEN;
                 }
                 ServerMessage::Close => {
                     instance.websocket = None;
-                    instance.open = false;
+                    state.ready_state = ReadyState::CLOSED;
                 }
                 _ => {}
             }
@@ -44,10 +40,11 @@ pub fn read_stream_wasm(
     }
 }
 
-pub fn write_message_wasm(
+pub(crate) fn write_message_wasm(
     mut commands: Commands,
     mut instance: NonSendMut<WebSocketInstance>,
     mut events: EventReader<ClientMessage>,
+    mut state: ResMut<WebSocketState>,
 ) {
     for event in events.read() {
         match event {
@@ -56,22 +53,22 @@ pub fn write_message_wasm(
                 if let Some(ws) = &instance.websocket {
                     ws.close().expect("Failed to close WebSocket");
                     instance.websocket = None;
-                    instance.open = false;
+                    state.ready_state = ReadyState::CLOSING;
                 }
 
                 let (tx, rx) = unbounded::<ServerMessage>();
                 let tx_err = tx.clone();
                 let tx_open = tx.clone();
                 let tx_close = tx.clone();
-                console_debug!("Connecting to WebSocket at {}", url);
+                info!("Connecting to WebSocket at {}", url);
                 match WebSocket::new(&url) {
                     Ok(ws) => {
-                        console_debug!("Connected");
+                        debug!("Connected");
 
                         ws.set_binary_type(BinaryType::Arraybuffer);
 
                         let on_error = Closure::wrap(Box::new(move |event: Event| {
-                            web_sys::console::log_1(&JsValue::from(event));
+                            error!("WebSocket error: {:?}", event);
                             tx_err
                                 .send(ServerMessage::Error("ERROR".to_string()))
                                 .unwrap();
@@ -81,7 +78,7 @@ pub fn write_message_wasm(
                         on_error.forget();
 
                         let on_open = Closure::<dyn Fn()>::new(move || {
-                            console::log_1(&"WebSocket opened".into());
+                            debug!("WebSocket opened");
                             tx_open.send(ServerMessage::Open).unwrap();
                         });
                         ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
@@ -94,7 +91,6 @@ pub fn write_message_wasm(
                             let data = message_event.data();
                             if data.is_string() {
                                 let message = data.as_string().expect("Data should be a string");
-                                console_debug!("WebSocket message: {:?}", message);
                                 tx.send(ServerMessage::String(message)).unwrap();
                             } else if data.is_instance_of::<ArrayBuffer>() {
                                 let array_buffer = data.dyn_ref::<ArrayBuffer>().unwrap();
@@ -102,7 +98,7 @@ pub fn write_message_wasm(
                                 let vec = uint8_array.to_vec();
                                 tx.send(ServerMessage::Binary(vec)).unwrap();
                             } else {
-                                console_error!("Unexpected WebSocket message type");
+                                error!("Unexpected WebSocket message type");
                             }
                         })
                             as Box<dyn FnMut(_)>);
@@ -110,7 +106,7 @@ pub fn write_message_wasm(
                         on_message.forget();
 
                         let on_close = Closure::<dyn Fn()>::new(move || {
-                            console::log_1(&"WebSocket closed".into());
+                            debug!("WebSocket closed");
                             tx_close.send(ServerMessage::Close).unwrap();
                         });
                         ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
@@ -118,13 +114,12 @@ pub fn write_message_wasm(
 
                         *instance = WebSocketInstance {
                             websocket: Some(ws),
-                            open: false,
                         };
 
                         commands.insert_resource(StreamReceiver(rx));
                     }
                     Err(e) => {
-                        console_error!("Failed to create WebSocket: {:?}", e);
+                        error!("Failed to create WebSocket: {:?}", e);
                     }
                 }
             }
@@ -134,7 +129,7 @@ pub fn write_message_wasm(
                         ws.send_with_str(s)
                             .expect("Failed to send WebSocket string message");
                     } else {
-                        console_error!("WebSocket is not open");
+                        warn!("WebSocket is not open");
                     }
                 }
             }
@@ -144,7 +139,7 @@ pub fn write_message_wasm(
                         ws.send_with_u8_array(b)
                             .expect("Failed to send WebSocket binary message");
                     } else {
-                        console_error!("WebSocket is not open");
+                        warn!("WebSocket is not open");
                     }
                 }
             }
@@ -152,31 +147,9 @@ pub fn write_message_wasm(
                 if let Some(ws) = &instance.websocket {
                     ws.close().expect("Failed to close WebSocket");
                     instance.websocket = None;
-                    instance.open = false;
+                    state.ready_state = ReadyState::CLOSED;
                 }
             }
         }
     }
-}
-
-// https://rustwasm.github.io/wasm-bindgen/examples/console-log.html
-#[macro_export]
-macro_rules! console_log {
-    // Note that this is using the `log` function imported above during
-    // `bare_bones`
-    ($($t:tt)*) => (web_sys::console::log_1(&wasm_bindgen::JsValue::from(&format_args!($($t)*).to_string())))
-}
-
-#[macro_export]
-macro_rules! console_debug {
-    // Note that this is using the `log` function imported above during
-    // `bare_bones`
-    ($($t:tt)*) => (web_sys::console::debug_1(&wasm_bindgen::JsValue::from(&format_args!($($t)*).to_string())))
-}
-
-#[macro_export]
-macro_rules! console_error {
-    // Note that this is using the `log` function imported above during
-    // `bare_bones`
-    ($($t:tt)*) => (web_sys::console::error_1(&wasm_bindgen::JsValue::from(&format_args!($($t)*).to_string())))
 }

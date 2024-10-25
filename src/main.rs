@@ -54,7 +54,6 @@ fn setup(
     mut writer: EventWriter<ClientMessage>,
 ) {
     let uuid = Uuid::new_v4();
-    // console_log!("self uuid: {:?}", uuid);
 
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
@@ -81,7 +80,7 @@ fn update(
     mut writer: EventWriter<ClientMessage>,
     mut self_query: Query<(&SelfPlayer, &mut Transform)>,
     others_query: Query<(Entity, &mut OtherPlayer)>,
-    instance: NonSend<WebSocketInstance>,
+    state: Res<WebSocketState>,
     frame_count: Res<FrameCount>,
 ) {
     let w = to_sign(&keys, KeyCode::KeyW);
@@ -94,7 +93,7 @@ fn update(
 
         let message_interval = 1;
 
-        if instance.open && frame_count.0 % message_interval == 0 {
+        if state.ready_state == ReadyState::OPEN && frame_count.0 % message_interval == 0 {
             let value = PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
@@ -107,7 +106,7 @@ fn update(
 
     for (entity, player) in others_query.iter() {
         if 120 < (frame_count.0 - player.last_update.0) {
-            console_log!("despawn other player {:?}", player.uuid);
+            info!("despawn other player {:?}", player.uuid);
             commands.entity(entity).despawn();
         }
     }
@@ -128,14 +127,14 @@ fn process_message(
     for event in reader.read() {
         match event {
             ServerMessage::Error(err) => {
-                console_log!("WebSocket error: {:?}", err);
+                error!("WebSocket error: {:?}", err);
             }
             ServerMessage::Open => {
-                console_log!("WebSocket opened");
+                info!("WebSocket opened");
                 writer.send(ClientMessage::String("hello, server".to_string()));
             }
             ServerMessage::String(message) => {
-                console_log!("WebSocket string message: {:?}", message);
+                info!("WebSocket string message: {:?}", message);
             }
             ServerMessage::Binary(bytes) => {
                 let msg = bincode::deserialize::<PlayerMessage>(bytes).unwrap();
@@ -154,7 +153,7 @@ fn process_message(
 
                 // spawn new player
                 if !synced {
-                    console_log!("spawning other player {:?}", msg.uuid);
+                    info!("spawning other player {:?}", msg.uuid);
                     commands.spawn((
                         OtherPlayer {
                             uuid: msg.uuid,
@@ -170,7 +169,7 @@ fn process_message(
                 }
             }
             ServerMessage::Close => {
-                console_log!("WebSocket closed");
+                info!("WebSocket closed");
             }
         }
     }

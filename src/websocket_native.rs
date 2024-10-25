@@ -3,25 +3,22 @@
 use crate::websocket_shared::*;
 use bevy::prelude::*;
 use bevy_tokio_tasks::TokioTasksRuntime;
-use futures_util::{future, pin_mut, SinkExt, StreamExt};
+use futures_util::{future, pin_mut, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[derive(Default)]
-pub struct WebSocketInstance {
-    pub stdin_tx: Option<futures_channel::mpsc::UnboundedSender<Message>>,
-    pub open: bool,
-    pub sender: Option<crossbeam_channel::Sender<Message>>,
-    pub receiver: Option<crossbeam_channel::Receiver<Message>>,
+pub(crate) struct WebSocketInstance {
+    stdin_tx: Option<futures_channel::mpsc::UnboundedSender<Message>>,
+    receiver: Option<crossbeam_channel::Receiver<Message>>,
 }
 
 // This system reads from the receiver and sends events to Bevy
-pub fn read_stream_native(
+pub(crate) fn read_stream_native(
     mut events: EventWriter<ServerMessage>,
     instance: NonSendMut<WebSocketInstance>,
 ) {
     if let Some(receiver) = &instance.receiver {
         for item in receiver.try_iter() {
-            // println!("Received message: {:?}", item);
             match item {
                 Message::Text(s) => {
                     events.send(ServerMessage::String(s.clone()));
@@ -38,7 +35,7 @@ pub fn read_stream_native(
     }
 }
 
-pub fn write_message_native(
+pub(crate) fn write_message_native(
     mut instance: NonSendMut<WebSocketInstance>,
     mut events: EventReader<ClientMessage>,
     runtime: ResMut<TokioTasksRuntime>,
@@ -60,11 +57,9 @@ pub fn write_message_native(
                 runtime.spawn_background_task(|mut ctx| async move {
                     let (sender, receiver) = crossbeam_channel::unbounded::<Message>();
 
-                    let sender_clone = sender.clone();
-
                     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded::<Message>();
 
-                    println!("Connecting to WebSocket at {}", url_clone);
+                    debug!("Connecting to WebSocket at {}", url_clone);
 
                     let (ws_stream, _response) =
                         connect_async(url_clone).await.expect("can't connect");
@@ -83,13 +78,14 @@ pub fn write_message_native(
                         let world = ctx.world;
                         world.insert_non_send_resource(WebSocketInstance {
                             stdin_tx: Some(stdin_tx),
-                            open: true,
-                            sender: Some(sender_clone),
                             receiver: Some(receiver),
+                        });
+                        world.insert_resource(WebSocketState {
+                            ready_state: ReadyState::OPEN,
                         });
                         world.send_event(ServerMessage::Open);
 
-                        println!("Connected to the server");
+                        debug!("Connected to the server");
                     })
                     .await;
 
@@ -99,13 +95,11 @@ pub fn write_message_native(
             }
             ClientMessage::String(s) => {
                 if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    // println!("Sending message: {}", s);
                     stdin_tx
                         .unbounded_send(Message::Text(s.clone()))
                         .expect("unbounded_send failed at ClientMessage::String");
-                    // println!("Message sent");
                 } else {
-                    println!("Sender is None");
+                    warn!("Sender is None");
                 }
             }
             ClientMessage::Binary(b) => {
@@ -114,7 +108,7 @@ pub fn write_message_native(
                         .unbounded_send(Message::Binary(b.clone()))
                         .expect("unbounded_send failed at ClientMessage::Binary");
                 } else {
-                    println!("Sender is None");
+                    warn!("Sender is None");
                 }
             }
             ClientMessage::Close => {
@@ -123,24 +117,9 @@ pub fn write_message_native(
                         .unbounded_send(Message::Close(None))
                         .expect("unbounded_send failed at ClientMessage::Close");
                 } else {
-                    println!("Sender is None");
+                    warn!("Sender is None");
                 }
             }
         }
     }
-}
-
-#[macro_export]
-macro_rules! console_log {
-    ($($arg:tt)*) => (println!($($arg)*));
-}
-
-#[macro_export]
-macro_rules! console_debug {
-    ($($arg:tt)*) => (dbg!($($arg)*));
-}
-
-#[macro_export]
-macro_rules! console_error {
-    ($($arg:tt)*) => (dbg!($($arg)*));
 }
