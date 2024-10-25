@@ -1,29 +1,23 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use crate::websocket_shared::*;
-use bevy::ecs::world::CommandQueue;
 use bevy::prelude::*;
-use bevy::tasks::Task;
 use bevy_tokio_tasks::TokioTasksRuntime;
-use crossbeam_channel::unbounded;
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
-use tokio::io::AsyncWriteExt;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
+
 #[derive(Default)]
 pub struct WebSocketInstance {
     pub stdin_tx: Option<futures_channel::mpsc::UnboundedSender<Message>>,
-    // pub receiver: Option<futures_channel::mpsc::UnboundedReceiver<Message>>,
     pub open: bool,
-
     pub sender: Option<crossbeam_channel::Sender<Message>>,
     pub receiver: Option<crossbeam_channel::Receiver<Message>>,
 }
 
 // This system reads from the receiver and sends events to Bevy
 pub fn read_stream_native(
-    receiver_option: Option<Res<StreamReceiver>>,
     mut events: EventWriter<ServerMessage>,
-    mut instance: NonSendMut<WebSocketInstance>,
+    instance: NonSendMut<WebSocketInstance>,
 ) {
     if let Some(receiver) = &instance.receiver {
         for item in receiver.try_iter() {
@@ -44,11 +38,7 @@ pub fn read_stream_native(
     }
 }
 
-#[derive(Component)]
-pub struct ComputeTransform(Task<CommandQueue>);
-
 pub fn write_message_native(
-    mut commands: Commands,
     mut instance: NonSendMut<WebSocketInstance>,
     mut events: EventReader<ClientMessage>,
     runtime: ResMut<TokioTasksRuntime>,
@@ -125,7 +115,9 @@ pub fn write_message_native(
             ClientMessage::String(s) => {
                 if let Some(ref mut stdin_tx) = instance.stdin_tx {
                     println!("Sending message: {}", s);
-                    stdin_tx.unbounded_send(Message::Text(s.clone()));
+                    stdin_tx
+                        .unbounded_send(Message::Text(s.clone()))
+                        .expect("unbounded_send failed at ClientMessage::String");
                     println!("Message sent");
                 } else {
                     println!("Sender is None");
@@ -133,14 +125,33 @@ pub fn write_message_native(
             }
             ClientMessage::Binary(b) => {
                 if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    stdin_tx.unbounded_send(Message::Binary(b.clone()));
+                    stdin_tx
+                        .unbounded_send(Message::Binary(b.clone()))
+                        .expect("unbounded_send failed at ClientMessage::Binary");
                 }
             }
             ClientMessage::Close => {
                 if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    stdin_tx.unbounded_send(Message::Close(None));
+                    stdin_tx
+                        .unbounded_send(Message::Close(None))
+                        .expect("unbounded_send failed at ClientMessage::Close");
                 }
             }
         }
     }
+}
+
+#[macro_export]
+macro_rules! console_log {
+    ($($arg:tt)*) => (println!($($arg)*));
+}
+
+#[macro_export]
+macro_rules! console_debug {
+    ($($arg:tt)*) => (dbg!($($arg)*));
+}
+
+#[macro_export]
+macro_rules! console_error {
+    ($($arg:tt)*) => (dbg!($($arg)*));
 }

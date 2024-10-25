@@ -96,7 +96,7 @@ fn update(
 
     for (entity, player) in others_query.iter() {
         if 120 < (frame_count.0 - player.last_update.0) {
-            // console_log!("despawn other player {:?}", player.uuid);
+            console_log!("despawn other player {:?}", player.uuid);
             commands.entity(entity).despawn();
         }
     }
@@ -117,20 +117,17 @@ fn process_message(
     for event in reader.read() {
         match event {
             ServerMessage::Error(err) => {
-                // console_log!("WebSocket error: {:?}", err)
-                println!("WebSocket error: {:?}", err);
+                console_log!("WebSocket error: {:?}", err);
             }
             ServerMessage::Open => {
-                // console_log!("WebSocket opened");
+                console_log!("WebSocket opened");
                 writer.send(ClientMessage::String("hello, server".to_string()));
             }
             ServerMessage::String(message) => {
-                // console_log!("WebSocket string message: {:?}", message);
-                println!("WebSocket string message: {:?}", message);
+                console_log!("WebSocket string message: {:?}", message);
             }
             ServerMessage::Binary(bytes) => {
                 let msg = bincode::deserialize::<PlayerMessage>(bytes).unwrap();
-                // console_log!("WebSocket binary message({:?}): {:?}", bytes.len(), msg);
 
                 // sync position of existing player
                 let mut synced = false;
@@ -146,7 +143,7 @@ fn process_message(
 
                 // spawn new player
                 if !synced {
-                    // console_log!("spawning other player {:?}", msg.uuid);
+                    console_log!("spawning other player {:?}", msg.uuid);
                     commands.spawn((
                         OtherPlayer {
                             uuid: msg.uuid,
@@ -161,7 +158,7 @@ fn process_message(
                 }
             }
             ServerMessage::Close => {
-                // console_log!("WebSocket closed");
+                console_log!("WebSocket closed");
             }
         }
     }
