@@ -99,11 +99,11 @@ pub fn write_message_native(
             }
             ClientMessage::String(s) => {
                 if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    println!("Sending message: {}", s);
+                    // println!("Sending message: {}", s);
                     stdin_tx
                         .unbounded_send(Message::Text(s.clone()))
                         .expect("unbounded_send failed at ClientMessage::String");
-                    println!("Message sent");
+                    // println!("Message sent");
                 } else {
                     println!("Sender is None");
                 }
@@ -113,6 +113,8 @@ pub fn write_message_native(
                     stdin_tx
                         .unbounded_send(Message::Binary(b.clone()))
                         .expect("unbounded_send failed at ClientMessage::Binary");
+                } else {
+                    println!("Sender is None");
                 }
             }
             ClientMessage::Close => {
@@ -120,6 +122,8 @@ pub fn write_message_native(
                     stdin_tx
                         .unbounded_send(Message::Close(None))
                         .expect("unbounded_send failed at ClientMessage::Close");
+                } else {
+                    println!("Sender is None");
                 }
             }
         }

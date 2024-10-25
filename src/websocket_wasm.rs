@@ -33,6 +33,10 @@ pub fn read_stream_wasm(
                 ServerMessage::Open => {
                     instance.open = true;
                 }
+                ServerMessage::Close => {
+                    instance.websocket = None;
+                    instance.open = false;
+                }
                 _ => {}
             }
             events.send(from_stream);
@@ -50,7 +54,7 @@ pub fn write_message_wasm(
             ClientMessage::Open(url) => {
                 // Close the existing WebSocket if it exists
                 if let Some(ws) = &instance.websocket {
-                    ws.close().unwrap();
+                    ws.close().expect("Failed to close WebSocket");
                     instance.websocket = None;
                     instance.open = false;
                 }
@@ -126,17 +130,27 @@ pub fn write_message_wasm(
             }
             ClientMessage::String(s) => {
                 if let Some(ws) = &instance.websocket {
-                    ws.send_with_str(s).unwrap();
+                    if ws.ready_state() == WebSocket::OPEN {
+                        ws.send_with_str(s)
+                            .expect("Failed to send WebSocket string message");
+                    } else {
+                        console_error!("WebSocket is not open");
+                    }
                 }
             }
             ClientMessage::Binary(b) => {
                 if let Some(ws) = &instance.websocket {
-                    ws.send_with_u8_array(b).unwrap();
+                    if ws.ready_state() == WebSocket::OPEN {
+                        ws.send_with_u8_array(b)
+                            .expect("Failed to send WebSocket binary message");
+                    } else {
+                        console_error!("WebSocket is not open");
+                    }
                 }
             }
             ClientMessage::Close => {
                 if let Some(ws) = &instance.websocket {
-                    ws.close().unwrap();
+                    ws.close().expect("Failed to close WebSocket");
                     instance.websocket = None;
                     instance.open = false;
                 }
