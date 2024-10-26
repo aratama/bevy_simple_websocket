@@ -1,8 +1,4 @@
 use bevy::prelude::*;
-use crossbeam_channel::Receiver;
-
-#[derive(Resource, Deref)]
-pub(crate) struct StreamReceiver(pub Receiver<ServerMessage>);
 
 #[derive(Event)]
 pub enum ServerMessage {

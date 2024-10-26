@@ -11,6 +11,9 @@ use web_sys::Event;
 use web_sys::MessageEvent;
 use web_sys::WebSocket;
 
+#[derive(Resource, Deref)]
+pub(crate) struct StreamReceiver(pub crossbeam_channel::Receiver<ServerMessage>);
+
 #[derive(Default)]
 pub(crate) struct WebSocketInstance {
     pub websocket: Option<WebSocket>,
