@@ -15,23 +15,37 @@ pub(crate) struct WebSocketInstance {
 // This system reads from the receiver and sends events to Bevy
 pub(crate) fn read_stream_native(
     mut events: EventWriter<ServerMessage>,
-    instance: NonSendMut<WebSocketInstance>,
+    mut instance: NonSendMut<WebSocketInstance>,
+    mut state: ResMut<WebSocketState>,
 ) {
-    if let Some(receiver) = &instance.receiver {
-        for item in receiver.try_iter() {
-            match item {
-                Message::Text(s) => {
-                    events.send(ServerMessage::String(s.clone()));
+    let mut closed = false;
+
+    if state.ready_state == ReadyState::OPEN {
+        if let Some(receiver) = &instance.receiver {
+            for item in receiver.try_iter() {
+                if !closed {
+                    match item {
+                        Message::Text(s) => {
+                            events.send(ServerMessage::String(s.clone()));
+                        }
+                        Message::Binary(b) => {
+                            events.send(ServerMessage::Binary(b.clone()));
+                        }
+                        Message::Close(_) => {
+                            closed = true;
+                            state.ready_state = ReadyState::CLOSED;
+                            events.send(ServerMessage::Close);
+                        }
+                        _ => {}
+                    }
                 }
-                Message::Binary(b) => {
-                    events.send(ServerMessage::Binary(b.clone()));
-                }
-                Message::Close(_) => {
-                    events.send(ServerMessage::Close);
-                }
-                _ => {}
             }
         }
+    }
+
+    if closed {
+        instance.stdin_tx = None;
+        instance.receiver = None;
     }
 }
 
@@ -39,17 +53,15 @@ pub(crate) fn write_message_native(
     mut instance: NonSendMut<WebSocketInstance>,
     mut events: EventReader<ClientMessage>,
     runtime: ResMut<TokioTasksRuntime>,
+    state: Res<WebSocketState>,
 ) {
     for event in events.read() {
         match event {
             ClientMessage::Open(url) => {
-                // Close the existing WebSocket if it exists
-
-                // if let Some(ref mut ws) = instance.websocket {
-                //     ws.lock().unwrap().close(None).unwrap();
-                //     instance.websocket = None;
-                //     instance.open = false;
-                // }
+                if state.ready_state == ReadyState::OPEN {
+                    warn!("WebSocket is already open");
+                    continue;
+                }
 
                 let url_clone = url.clone();
 
@@ -94,7 +106,9 @@ pub(crate) fn write_message_native(
                 });
             }
             ClientMessage::String(s) => {
-                if let Some(ref mut stdin_tx) = instance.stdin_tx {
+                if state.ready_state != ReadyState::OPEN {
+                    warn!("WebSocket is not open");
+                } else if let Some(ref mut stdin_tx) = instance.stdin_tx {
                     stdin_tx
                         .unbounded_send(Message::Text(s.clone()))
                         .expect("unbounded_send failed at ClientMessage::String");
@@ -103,7 +117,9 @@ pub(crate) fn write_message_native(
                 }
             }
             ClientMessage::Binary(b) => {
-                if let Some(ref mut stdin_tx) = instance.stdin_tx {
+                if state.ready_state != ReadyState::OPEN {
+                    warn!("WebSocket is not open");
+                } else if let Some(ref mut stdin_tx) = instance.stdin_tx {
                     stdin_tx
                         .unbounded_send(Message::Binary(b.clone()))
                         .expect("unbounded_send failed at ClientMessage::Binary");
@@ -112,7 +128,9 @@ pub(crate) fn write_message_native(
                 }
             }
             ClientMessage::Close => {
-                if let Some(ref mut stdin_tx) = instance.stdin_tx {
+                if state.ready_state != ReadyState::OPEN {
+                    warn!("WebSocket is not open");
+                } else if let Some(ref mut stdin_tx) = instance.stdin_tx {
                     stdin_tx
                         .unbounded_send(Message::Close(None))
                         .expect("unbounded_send failed at ClientMessage::Close");
