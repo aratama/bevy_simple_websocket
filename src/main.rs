@@ -1,7 +1,7 @@
 use bevy::asset::AssetMetaCheck;
 use bevy::core::FrameCount;
 use bevy::prelude::*;
-use bevy_websocket_sync::*;
+use bevy_simple_websocket::*;
 use dotenvy_macro::dotenv;
 use rand;
 use serde::Deserialize;

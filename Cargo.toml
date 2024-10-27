@@ -1,5 +1,5 @@
 [package]
-name = "bevy_websocket_sync"
+name = "bevy_simple_websocket"
 version = "0.2.5"
 edition = "2021"
 

@@ -1,7 +1,7 @@
-# bevy_websocket_sync
+# bevy_simple_websocket
 
 Extremely simple WebSocket client library for Bevy.
-This library works in both native and WASM.
+This library works in both native and WASM(Web Browser).
 
 ## Usage of Example
 
@@ -26,7 +26,7 @@ $ trunk serve
 
 # Demo
 
-https://aratama.github.io/bevy_websocket_sync/
+https://aratama.github.io/bevy_simple_websocket/
 
 # References
 
