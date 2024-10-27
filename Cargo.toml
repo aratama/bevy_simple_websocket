@@ -1,14 +1,17 @@
 [package]
 name = "bevy_websocket_sync"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.14.2", features = [
+bevy = { version = "0.14.2", default-features = false, features = [
     "bevy_asset",
     "bevy_core_pipeline",
     "bevy_render",
     "multi_threaded",
+    "bevy_sprite",
+    "png",
+    "bevy_winit",
 ] }
 bincode = "1.3.3"
 crossbeam-channel = "0.5.13"
