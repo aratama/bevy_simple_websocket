@@ -109,9 +109,9 @@ pub(crate) fn write_message_native(
                 if state.ready_state != ReadyState::OPEN {
                     warn!("WebSocket is not open");
                 } else if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    stdin_tx
-                        .unbounded_send(Message::Text(s.clone()))
-                        .expect("unbounded_send failed at ClientMessage::String");
+                    if let Err(err) = stdin_tx.unbounded_send(Message::Text(s.clone())) {
+                        warn!("unbounded_send failed at ClientMessage::String: {:?}", err);
+                    };
                 } else {
                     warn!("Sender is None");
                 }
@@ -120,9 +120,9 @@ pub(crate) fn write_message_native(
                 if state.ready_state != ReadyState::OPEN {
                     warn!("WebSocket is not open");
                 } else if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    stdin_tx
-                        .unbounded_send(Message::Binary(b.clone()))
-                        .expect("unbounded_send failed at ClientMessage::Binary");
+                    if let Err(err) = stdin_tx.unbounded_send(Message::Binary(b.clone())) {
+                        warn!("unbounded_send failed at ClientMessage::Binary: {:?}", err);
+                    }
                 } else {
                     warn!("Sender is None");
                 }
@@ -131,9 +131,9 @@ pub(crate) fn write_message_native(
                 if state.ready_state != ReadyState::OPEN {
                     warn!("WebSocket is not open");
                 } else if let Some(ref mut stdin_tx) = instance.stdin_tx {
-                    stdin_tx
-                        .unbounded_send(Message::Close(None))
-                        .expect("unbounded_send failed at ClientMessage::Close");
+                    if let Err(err) = stdin_tx.unbounded_send(Message::Close(None)) {
+                        warn!("unbounded_send failed at ClientMessage::Close: {:?}", err);
+                    }
                 } else {
                     warn!("Sender is None");
                 }
