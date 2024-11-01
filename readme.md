@@ -1,33 +1,65 @@
 # bevy_simple_websocket
 
-Extremely simple WebSocket client library for Bevy.
-This library works in both native and WASM(Web Browser).
+Simple WebSocket client library for [Bevy Engine](https://bevyengine.org/).
 
-## Usage of Example
+This is a "raw" WebSocket client library, so you can send to and receive from servers written in any programming language.
 
-Add `.env` as:
+This library works in both native and WASM.
 
-```
-url=ws://localhost:8080
-```
+## Basic Usage
 
-Then, start WebSocket server:
+### Establishing a connection
 
-```
-$ cd serve
-$ node server
-```
+You can request opening connection with sending a `ClientMessage::Open` event to `EventWriter<ClientMessage>`.
 
-Finally, start client:
-
-```
-$ trunk serve
+```rust
+fn setup_system(
+    ...
+    mut writer: EventWriter<ClientMessage>,
+) {
+    ...
+    writer.send(ClientMessage::Open(url));
+}
 ```
 
-# Demo
+`url` is a URL of WebSocket server like `wss://some-websocket-server.example.com`.
 
-https://aratama.github.io/bevy_simple_websocket/
+### Sending Messages
 
-# References
+After a connection established, the client can start sending text messages with `ClientMessage::String(str)` event. You should check the current state via `Res<WebSocketState>`.
 
-- https://github.com/bevyengine/bevy/blob/main/examples/async_tasks/external_source_external_thread.rs
+```rust
+fn send_message_system(
+    ...
+    state: Res<WebSocketState>,
+    mut writer: EventWriter<ClientMessage>,
+) {
+    if state.ready_state == ReadyState::OPEN {
+        ...
+        writer.send(ClientMessage::String(str));
+        ...
+    }
+}
+```
+
+You can also send binary messages as `writer.send(ClientMessage::Binary(bin))`.
+
+### Receiving Messages
+
+Messages from the server can be received through the `EventReader<ServerMessage>` event.
+
+```rust
+fn process_message_system(
+    ...
+    mut reader: EventReader<ServerMessage>,
+) {
+    for event in reader.read() {
+        match event {
+            ServerMessage::Open(message) => { ... }
+            ServerMessage::String(message) => { ... }
+            ServerMessage::Binary(bytes) => { ... }
+            ServerMessage::Close => { ... }
+        }
+    }
+}
+```
