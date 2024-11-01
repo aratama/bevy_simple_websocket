@@ -1,4 +1,3 @@
-use bevy::asset::AssetMetaCheck;
 use bevy::core::FrameCount;
 use bevy::prelude::*;
 use bevy_simple_websocket::*;
@@ -27,21 +26,13 @@ struct SelfPlayer {
 
 fn main() {
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(AssetPlugin {
-                    // https://github.com/bevyengine/bevy/issues/10157
-                    meta_check: AssetMetaCheck::Never,
-                    ..default()
-                })
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        resolution: (500., 300.).into(),
-                        ..default()
-                    }),
-                    ..default()
-                }),
-        )
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: (500., 300.).into(),
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(WebSocketPlugin)
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, (process_message, update))
@@ -91,9 +82,7 @@ fn update(
         transform.translation.x += (d - a) * 2.0;
         transform.translation.y += (w - s) * 2.0;
 
-        let message_interval = 1;
-
-        if state.ready_state == ReadyState::OPEN && frame_count.0 % message_interval == 0 {
+        if state.ready_state == ReadyState::OPEN {
             let value = PlayerMessage {
                 uuid: player.uuid,
                 position: Vec2::new(transform.translation.x, transform.translation.y),
