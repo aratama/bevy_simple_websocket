@@ -1,3 +1,5 @@
+// server example using ws library
+
 import { WebSocket, WebSocketServer } from 'ws';
 
 const wss = new WebSocketServer({ port: 8080 });

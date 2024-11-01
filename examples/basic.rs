@@ -148,7 +148,7 @@ fn process_message(
                         },
                         SpriteBundle {
                             texture: asset_setver.load("icon.png"),
-                            transform: Transform::from_xyz(msg.position.x, 0., 0.)
+                            transform: Transform::from_translation(msg.position.extend(0.))
                                 .with_scale(Vec3::splat(0.2)),
                             ..default()
                         },
