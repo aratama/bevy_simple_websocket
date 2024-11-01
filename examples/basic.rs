@@ -44,11 +44,11 @@ fn setup(
     asset_setver: Res<AssetServer>,
     mut writer: EventWriter<ClientMessage>,
 ) {
-    let uuid = Uuid::new_v4();
-
     commands.spawn(Camera2dBundle::default());
     commands.spawn((
-        SelfPlayer { uuid },
+        SelfPlayer {
+            uuid: Uuid::new_v4(),
+        },
         SpriteBundle {
             texture: asset_setver.load("icon.png"),
             transform: Transform::from_xyz(
@@ -74,34 +74,32 @@ fn update(
     state: Res<WebSocketState>,
     frame_count: Res<FrameCount>,
 ) {
+    // update position by key input
     let w = to_sign(&keys, KeyCode::KeyW);
     let a = to_sign(&keys, KeyCode::KeyA);
     let s = to_sign(&keys, KeyCode::KeyS);
     let d = to_sign(&keys, KeyCode::KeyD);
-    for (player, mut transform) in self_query.iter_mut() {
-        transform.translation.x += (d - a) * 2.0;
-        transform.translation.y += (w - s) * 2.0;
+    let speed = 2.0;
+    let (player, mut transform) = self_query.single_mut();
+    transform.translation.x += (d - a) * speed;
+    transform.translation.y += (w - s) * speed;
 
-        if state.ready_state == ReadyState::OPEN {
-            let value = PlayerMessage {
-                uuid: player.uuid,
-                position: Vec2::new(transform.translation.x, transform.translation.y),
-            };
-            let bin = bincode::serialize(&value).unwrap();
-            // console_log!("send bincode");
-            writer.send(ClientMessage::Binary(bin));
-        }
+    // send position to server
+    if state.ready_state == ReadyState::OPEN {
+        let message = PlayerMessage {
+            uuid: player.uuid,
+            position: Vec2::new(transform.translation.x, transform.translation.y),
+        };
+        let bin = bincode::serialize(&message).unwrap();
+        writer.send(ClientMessage::Binary(bin));
     }
 
+    // despawn other player if not updated for 30 frames
     for (entity, player) in others_query.iter() {
-        if 120 < (frame_count.0 - player.last_update.0) {
+        if 30 < (frame_count.0 - player.last_update.0) {
             info!("despawn other player {:?}", player.uuid);
             commands.entity(entity).despawn();
         }
-    }
-
-    if keys.just_pressed(KeyCode::Space) {
-        writer.send(ClientMessage::String("Hello ".to_string()));
     }
 }
 
