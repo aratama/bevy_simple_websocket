@@ -44,21 +44,18 @@ fn setup(
     asset_setver: Res<AssetServer>,
     mut writer: EventWriter<ClientMessage>,
 ) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d::default());
     commands.spawn((
         SelfPlayer {
             uuid: Uuid::new_v4(),
         },
-        SpriteBundle {
-            texture: asset_setver.load("icon.png"),
-            transform: Transform::from_xyz(
-                200.0 * (rand::random::<f32>() - 0.5),
-                200.0 * (rand::random::<f32>() - 0.5),
-                0.,
-            )
-            .with_scale(Vec3::splat(0.2)),
-            ..default()
-        },
+        Sprite::from_image(asset_setver.load("icon.png")),
+        Transform::from_xyz(
+            200.0 * (rand::random::<f32>() - 0.5),
+            200.0 * (rand::random::<f32>() - 0.5),
+            0.,
+        )
+        .with_scale(Vec3::splat(0.2)),
     ));
 
     let url = dotenv!("url");
@@ -146,12 +143,9 @@ fn process_message(
                             uuid: msg.uuid,
                             last_update: frame_count.clone(),
                         },
-                        SpriteBundle {
-                            texture: asset_setver.load("icon.png"),
-                            transform: Transform::from_translation(msg.position.extend(0.))
-                                .with_scale(Vec3::splat(0.2)),
-                            ..default()
-                        },
+                        Sprite::from_image(asset_setver.load("icon.png")),
+                        Transform::from_translation(msg.position.extend(0.))
+                            .with_scale(Vec3::splat(0.2)),
                     ));
                 }
             }
